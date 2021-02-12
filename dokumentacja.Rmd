@@ -1,0 +1,537 @@
+---
+title: "PADR_PROJEKT"
+author: "Aleksandra Krakowiak"
+date: "11 01 2021"
+output:
+  word_document: default
+  html_document: default
+  pdf_document: default
+---
+
+# Dokumentacja RMarkdown
+
+# Analiza rozwoju epidemii HIV/AIDA
+
+## Opis celu i zalożenia projektu
+
+Tematem projektu byla analiza rozwoju epidemii HIV/AIDS na poszczególnych kontynentach. Dane wykorzystane w projekcie pobrano ze strony <http://aidsinfo.unaids.org>. W zadaniu wykorzystano dane, ktore zawieraly informacje dotyczace istniejacych przypadkow, nowych zachorawn na HIV oraz informacje o smierci spowodowane tym wirusem na poszczegolnych kontynetach (regionach) z podzialem na cztery przedzialy wiekowe w okresie 1990-2019. Dane zostaly pobrane w formacie .xlsx.
+
+Wykorzystane przedzialy wiekowe to 0-14, 15-24, 15-49, 50+, kontynenty (regiony) - Azja z Pacyfikiem, Karaiby, Wschodnia Europa i Azja Centralna, Wschodnia i Poludniowa Afryka, Ameryka Srodkowa i Poludniowa, Srodkowozachodnia i Polnocna Afryka, Zachodnia i Centralna Afryka, Zachodnia i Centalna Europa wraz z Ameryka Polnocna.
+
+Przetwarzanie wstepne polegalo na zlaczeniu odpowiednich informacji w "jedno" oraz na uporzadkowaniu ich wartosci. 
+W dalszej czesci dokumntacji ten watek bedzie przedstawiony bardziej dokladnie.
+
+Na poczatku realizacji projektu zalozono, że sposób wizualizacji wyników bedzie obejmowal przedstawienie zaleznosci cech (istniejace przypadki, nowe przypadki, ilosc zgonow spowodowanych wirusem) w zaleznosci od czasu (dla wybranych przedzialow wiekowych oraz kontynetow). To zalozenie zrealizowano. Przedstawienie wynikow zostalo rowniez ukazane w tablicy przy wykorzystaniu funkcji _summary()_. Dodano rowniez wizualizacje przewidywan rozwoju epidemii jako oddzielna wizualizacje. 
+
+W projekcie jako rodzaj analizy wykorzystano przewidzenie dalszego rozwoju epidemii (wykorzystano pakiet _forecast_).
+
+We wstepnych zalozeniach aplikacji Shiny uwzgledniono, ze w czesci Shiny Input uzytkownik bedzie wybieral ceche (tzn. nowe przypadki, istniejace przypadki, ilosc zgonow), przedzial wiekowy oraz kontynent (region). Jako Shiny Output wybrano wyswietlanie wykresow i zapis do pliku .pdf. Jako jednym z zalozen Shiny Output miala byc rowiez wizualizacja z wykorzystaniem mapy swiata. W czasie realizacji projektu zdecydowano sie na:
+
+* Shiny Input: wybor cechy, przedzialu wiekowego, kontynet oraz rok(odpowiedzialny za wizualizacje procentowego udzialu danych kontynetow w danym roku dla wybranej cechy)
+* Shiny Output: wykresy przedstawiajace wybrane przez uzytkownika dane oraz zapis wykresow do pliku .pdf oraz tablica podsumuwujaca dane, wykres kolowy przedstawiajacy procentowy udzial kontynetow w danym roku ze wzgledu na wybrana ceche.
+
+W projekcie nie zrealizowano wizualizacji mapy swiata. Zastapiono ja wykresem kolowym - sens wykonanej wizualizacji pozostal ten sam.
+
+
+## Prezentacja pobierania danych i operacji ich przygotowania do pracy
+
+Podczas wykonywania tego etapu uzyto pakietu _readxl_, _dplyr_ oraz podstawowy.
+
+UWAGA!!! Ponizszy opis przygotowywania danych zostal przedstawiony dla cechy SMIERC. Przedstawione czynnosci zostaly powtorzone analogicznie dla pozostalych cech, ale nie zostaly uwzglednione w dokumentacji.
+
+Dane zostaly pobrane i umieszczone w odpowiednich folderach. Do wczytania tych danych uzyto funkcji _read_excel()_ z pakietu _readxl_. Umożliwilo to wczytanie informacji z pliku .xlsx do RStudio.
+Ponizej zostalo przedstawiony sposob wczytania plikow dotyczacych smierci spowodowanej wirusem dla roznych przedzialow wiekowych. 
+
+```{r wczytanie}
+library(readxl)
+#zaladowanie danych z odpowiednich plikow
+dane1s <- read_excel('/Users/Studentka/Desktop/PADR_projekt/wiek_0_14/smierc014.xlsx' )
+dane2s <- read_excel('/Users/Studentka/Desktop/PADR_projekt/wiek_15_24/smierc1524.xlsx')
+dane3s <- read_excel('/Users/Studentka/Desktop/PADR_projekt/wiek_25_49/smierc2549.xlsx')
+dane4s <- read_excel('/Users/Studentka/Desktop/PADR_projekt/wiek_50plus/smierc50plus.xlsx')
+```
+
+Nastepnie dokonano transpozycji (_t()_) wczytanych danych oraz stworzeno ramke danych przy uzyciu funkcji _as.data.frame()_ z pakietu podstawowego.
+
+```{r transpozaycja}
+#transpozycja danych
+daneTest1s = as.data.frame(t(dane1s))
+daneTest2s = as.data.frame(t(dane2s))
+daneTest3s = as.data.frame(t(dane3s))
+daneTest4s = as.data.frame(t(dane4s))
+```
+
+Stworzona ramke danych nalezalo opisac. W tym celu stworzono wektor (_c()_) z nazwami regionow. Funkcja _colnames()_ umozliwila podpisanie kolumn w ramkach danych.
+
+```{r wektor}
+kontynenty <- c('Azja_i_Pacyfik', 'Karaiby', 'Wschodnia_i_Poudniowa_Afryka', 
+                'Wschodnia_Europa_i_Azja_Centralna', 
+                'Ameryka_Srodkowa_i_Poludniowa','Srodkowozachodnia_i_Polnocna_Afryka', 
+                'Zachodnia_i_Centralna_Afryka', 
+                'Zachodnia_i_Centralna Europa_oraz_Ameryka_Polnocna','SWIAT')
+
+#nazwanie kolumn w "nowych" danych
+colnames(daneTest1s) <- kontynenty
+colnames(daneTest2s) <- kontynenty
+colnames(daneTest3s) <- kontynenty
+colnames(daneTest4s) <- kontynenty
+```
+
+Kolejnym krokiem bylo stworzenie ramki danych dla poszczegolnych kontynetow (regionow) (kolumny - przedzialy wiekowe, wiercze - kolejne lata obserwacji). Ten ruch umozliwil wieksza kontrole nad danymi.
+
+UWAGA!!! Poniższy kod prezentuje stworzenie ramki danych dla regionu - Azji i Pacyfiku. Wszystkie ponizsze czynnosci rowniez zostaly powtorzone w analogiczny sposób dla pozostalych regionow.
+
+```{r dane dla kontynetow}
+smiercAzja <- data.frame(daneTest1s$Azja_i_Pacyfik, 
+                         daneTest2s$Azja_i_Pacyfik,
+                         daneTest3s$Azja_i_Pacyfik, 
+                         daneTest4s$Azja_i_Pacyfik)
+head(smiercAzja, 5)
+```
+
+Powstala ramke danych nalezalo uporzadkowac. W powyzszym wyswietleniu pierwszych pieciu rekordow, latwo zauwazyc, ze pierwszy wiersz to nazwa regionu. Ten wiersz nalezalo usunac, aby nie wprowadzal niepotrzbnych zaklocen. Kolejna rzecza, ktora nalezalo ,,naprawic" to nazwy kolumn i wierszy. Nazwy kolumn to kolejne przedzialy wiekowe, a wiersze - kolejne lata. Do tej modyfikacji stworzono wektor z nazwami tych przedzialow oraz wektor z kolejnymi latami. Funkcje _colnames()_ oraz _rownanames()_ umozliwily nazwanie kolumn i wierszy (nazwanie kolumn odbywa sie w pozniejszym etapie). 
+
+```{r nazwanie}
+#usuniecie wiersza
+smiercAzja <-smiercAzja[-c(1),]
+#wektor z opisami przedzalow wiekowych
+opis <- c('wiek 0-14', 'wiek 15-24', 'wiek 15-49', 'wiek 50+')
+#wektor z opisami 1990-2019
+rok <- rep(1990:2019)
+#oczekiwane nazewnictwo
+rownames(smiercAzja) <- rok
+head(smiercAzja, 5)
+```
+
+Do poprawnych analiz nalezalo rowniez zmienic typ wartosci kolumn. Wartosci w kolumnach to _character_, a wymagana to _numeric_. Do zmiany typu danych wykorzystano funkcje _mutate()_ oraz operatora _%>%_ z pakietu _dplyr_. Kolejnym krokiem bylo usuniecie z komorek niepotrzebnych informacji (wartosci w nawiasach oraz znaki < ). W tym kroku wykorzystano funkcje _sapply()_ (zastapienie _for_ ) oraz _gsub()_ (operacje na znakach - zastapienie niechcianego znaku niczym), które umozliwily uporzadkowanie danych.
+
+```{r uporzadkowanie, results='hide', message=FALSE, warning=FALSE}
+#usuniecie niepotrzebynch infomacji
+smiercAzja <- data.frame(sapply(smiercAzja, function(x) {y<-gsub("\\[.*","",x); 
+                                            z<- gsub("<","",y);gsub(" ","",z)}))
+#nazwanie kolumn
+colnames(smiercAzja) <- opis
+#zmiana typu wartosci kolumn
+library(dplyr)
+smiercAzja <- smiercAzja %>%
+  mutate(`wiek 0-14`= as.numeric(`wiek 0-14`)) %>%
+  mutate(`wiek 15-24` = as.numeric(`wiek 15-24`)) %>%
+  mutate(`wiek 15-49` = as.numeric(`wiek 15-49`)) %>%
+  mutate(`wiek 50+`= as.numeric(`wiek 50+`))
+```
+
+Po wykonanych operacjach otrzymujemy ramke danych, ktora mozna wykorzystac w kolejnych etapach projektu. Poniższy kod prezentuje dane gotowe do analizy.
+
+```{r wyswietlenie}
+head(smiercAzja,5)
+
+tail(smiercAzja,5)
+```
+
+Podczas tworzenia ramek danych w analogiczny sposob jak powyżej natrafiono na puste dane. Strona, z której pobierano dane, poinformowala, ze w czasie tworzenia plikow w pewnych przypadkach brakowalo danych. Aby uniknac bledow w czasie analizy danych, puste dane zastapiono zerem.
+
+```{r puste dane, eval=FALSE}
+#Dla regionu Zachodnia i Centralna Europa wraz z Ameryka Polnocna brakowalo danych dla cechy przpadek dla przedzialu 0-14
+przypadekEurAm$`wiek 0-14`<-sapply(przypadekEurAm$`wiek 0-14`,function(x){y<-gsub("...",0,x)})
+```
+
+
+Nastepnie stworzono ramki danych dla poszczegolnych cech bez rozroznienia na przedzialy wiekowe.
+
+UWAGA!!! Ponizszy kod przedstawia stworzenie ramki danych dla cechy NOWE PRZYPADKI. Dla pozostalych cech kod jest analogiczny.
+
+```{r stworzenie GLOBAL}
+#zaladowanie danych
+daneTn <- read_excel('/Users/Studentka/Desktop/PADR_projekt/wszyscy/nowe.xlsx')
+#transpozycja danych i stworzenie ramki danych
+daneTestTn = as.data.frame((daneTn))
+#stworzenie wektora 
+region <- c('regiony')
+#stworzenie wektora, ktory opisuje kolumny ramki danych
+opis2 <- c(region,rok)
+#usuniecie niepotrzebych danych
+noweTotal <- data.frame(sapply(daneTestTn, function(x) {y<-gsub("\\[.*","",x); 
+                                        z<- gsub("<","",y);gsub(" ","",z)}))
+#usuniecie ostatniego wiersza, ktory odpowiada za sume wartosci w kolumnie
+noweTotal <- noweTotal[-c(9),]
+#zmiana typu wartosci kolumn
+noweTotal <- noweTotal %>%
+  mutate( X1990 = as.numeric(X1990))%>%
+  mutate( X1991 = as.numeric(X1991))%>%
+  mutate( X1992 = as.numeric(X1992))%>%
+  mutate( X1993 = as.numeric(X1993))%>%
+  mutate( X1994 = as.numeric(X1994))%>%
+  mutate( X1995 = as.numeric(X1995))%>%
+  mutate( X1996 = as.numeric(X1996))%>%
+  mutate( X1997 = as.numeric(X1997))%>%
+  mutate( X1998 = as.numeric(X1998))%>%
+  mutate( X1999 = as.numeric(X1999))%>%
+  mutate( X2000 = as.numeric(X2000))%>%
+  mutate( X2001 = as.numeric(X2001))%>%
+  mutate( X2002 = as.numeric(X2002))%>%
+  mutate( X2003 = as.numeric(X2003))%>%
+  mutate( X2004 = as.numeric(X2004))%>%
+  mutate( X2005 = as.numeric(X2005))%>%
+  mutate( X2006 = as.numeric(X2006))%>%
+  mutate( X2007 = as.numeric(X2007))%>%
+  mutate( X2008 = as.numeric(X2008))%>%
+  mutate( X2009 = as.numeric(X2009))%>%
+  mutate( X2010 = as.numeric(X2010))%>%
+  mutate( X2011 = as.numeric(X2011))%>%
+  mutate( X2012 = as.numeric(X2012))%>%
+  mutate( X2013 = as.numeric(X2013))%>%
+  mutate( X2014 = as.numeric(X2014))%>%
+  mutate( X2015 = as.numeric(X2015))%>%
+  mutate( X2016 = as.numeric(X2016))%>%
+  mutate( X2017 = as.numeric(X2017))%>%
+  mutate( X2018 = as.numeric(X2018))%>%
+  mutate( X2019 = as.numeric(X2019))
+#nazwanie kolumn
+colnames(noweTotal) <- opis2
+```
+
+Ostatnim etapem pracy nad przygotowaniem danych do analizy bylo stworzenie dodtkowych ramek danych oraz wektorow. Powstale ramki danych oraz wektory byly wykorzystywane podczas tworzenia aplikacji.  
+
+```{r pomoce}
+#stworzenie ramek danych z opcjami do wyboru przez użytkownika
+region <- c(rep("Azja", 12),rep("Karaiby",12), rep("Wschodnia i Poludniowa Afryka",12),
+            rep("Wschodnia Europa i Centralna Azja",12), rep("Srodkowa i Poludniowa Ameryka",12),
+            rep("Srodkowozachodnia i Polnocna Afryka",12), rep("Zachodnia i Centralna_Afryka",12),
+            rep("Zachodnia i Centralna Europa oraz Ameryka Polnocna",12))
+
+cecha <- c(rep("smierc",4), rep("nowe",4), rep("przypadek",4))
+wiek <- c('wiek 0-14', 'wiek 15-24', 'wiek 15-49', 'wiek 50+')
+dana <- data.frame(region, cecha=c(rep(cecha,8)), wiek=c(rep(wiek,8)))
+
+cecha <- data.frame(cecha = c("nowe", "smierc", "przypadek"))
+
+#stworzenie wektora z nazwami kontynetów
+kontynentyWykres <- c('Azja i Pacyfik', 'Karaiby', 'Wschodnia i Poudniowa_Afryka', 
+                'Wschodnia Europa i Azja Centralna', 
+                'Ameryka Srodkowa i Poludniowa','Srodkowozachodnia i Polnocna Afryka', 
+                'Zachodnia i Centralna Afryka', 
+                'Zachodnia i Centralna Europa oraz Ameryka Polnocna')
+```
+
+Wszystkie powstale ramki danych, pomoce itp. zostaly zapisane w formacie .RData, aby moc je wykorzystac w tworzeniu aplikacji.
+
+```{r zapis, eval = FALSE}
+save(file = "Dane.RData", smiercAzja,smiercEurAm,smiercKaraiby,smiercSPAmeryka, 
+     smiercSWPAfryka, smiercWEurAzja, smiercWPAfryka, smiercZCAfryka, smiercTotal, 
+     noweAzja, noweEurAm, noweKaraiby, noweSPAmeryka, noweSWPAfryka,
+     noweWEurAzja, noweWPAfryka, noweZCAfryka,
+     przypadekAzja, przypadekEurAm, przypadekKaraiby, przypadekSPAmeryka, 
+     przypadekSWPAfryka, przypadekWEurAzja, przypadekWPAfryka, przypadekZCAfryka, 
+     dana, noweTotal, smiercTotal, przypadekTotal, rok, cecha, kontynentyWykres)
+```
+
+## Wyglad aplikacji (ui.R)
+
+Aplikacja Shiny zostala stworzona przy pomocy pakietu _shiny_. Wyglad aplikacji zostal zdeklarowany w pliku _ui.R_. 
+
+Tytul aplikacji zostal storzony przy pomocy _titlePanel()_. Aplikacja zawiera dwie glowne zakladki ( _tabPanel()_): KONTYNENT i SWIAT. 
+
+W pierwszej zakladce stworzono podzial glownego panelu na dwa mniejsze ( _sidebarPanel()_, _mainPanel()_). Mniejszy panel odpowiada za pobranie informacji od użytkownika przy użyciu _selectInput()_ (uzytkownik wybiera przy pomocy utworzonej listy) oraz za wyswietlanie podsumowania odnosnie wybranych informacji ( _verbatimTextOutput()_). Wiekszy panel odpowiada za wynik wyboru uzytkownika (wyswietlenie odpowiedniego wykresu ( _plotOutput()_)). Nalezy rowniez zauwazyc, ze wiekszy panel ma zakladaki ( _tabPanel()_) OBECNIE oraz PRZEWIDYWANIA. W zakladce OBECNIE wyswietlany jest wykres na podstawie wyboru uzytkownika, natomiast zakladka PRZEWIDYWANIA - wyswietlanie wykresu na podstawie wyswietlanego wykresu w zakladce OBECNIE. Stworzone wykresy mozna pobrac - przycisk POBIERZ ( _downloadButton()_). Pod wykresem istnieje informacja stworzona dla użytkownika, w przypadku braku narysowanego wykresu ( _textOutput()_). 
+
+W zakladce SWIAT rowniez dokonano podzialu panelu na mniejszy i wiekszy. Mniejszy umozliwia uzytkownikowi wybor roku ( _sliderInput()_) przy pomocy ,,suwaka". W mniejszej czesci widnieje informacja ( _textOutput()_) dla uzytkownika o poprawnym wyswietlaniu wykresu. Wiekszy panel odpowiada za wyswietlanie wykresu kolowego wraz z legenda ( _plotOutput()_).
+
+```{r wyglad, eval=FALSE}
+library(shiny)
+#zaladowanie danych 
+load("Dane.RData")
+
+shinyUI(fluidPage(
+    # Tytyul aplikacji
+    titlePanel("Analiza rozwoju epidemii HIV/AIDS"),
+    #TabsetPanel - wybor zakladki
+    tabsetPanel(
+        tabPanel("KONTYNENT",
+                 sidebarPanel(
+                     selectInput("kontynent", "Region:", 
+                                 choices = kontynenty),
+                     hr(),
+                     selectInput("cecha", "Cecha:", 
+                                 choices = c("nowe","przypadek","smierc")),
+                     hr(),
+                     selectInput("wiek", "Przedzial wiekowy:", 
+                                 choices = opis),
+                     hr(),
+                     verbatimTextOutput('analiza')
+                 ),
+                 mainPanel(
+                     tabsetPanel(
+                         tabPanel("Obecnie",plotOutput("wykAnaliza"),
+                                  downloadButton('pobierz', 'Pobierz'),
+                                  hr(),
+                                  textOutput("uwagadane")),
+                         tabPanel("Przewidywania",
+                                  plotOutput("wykPredykcja"),
+                                  downloadButton('pobierzPred', 'Pobierz'),
+                                  hr(),
+                                  verbatimTextOutput("model"))
+                     ),
+                 )),
+        tabPanel("SWIAT",
+                 sidebarPanel(
+                     sliderInput("rok", "Rok:", min = 1990, max = 2019, 
+                                 value = 2005, sep = ""),
+                     hr(),
+                     textOutput("uwagawyswietlanie")
+                 ),
+                mainPanel(
+                    plotOutput("udzial")
+                    
+                ))
+    )
+))
+```
+
+Wyglad aplikacji: ![Wyglad aplikacji](/Users/Studentka/Desktop/PADR_projekt/projekt/wyglad.png)
+![](/Users/Studentka/Desktop/PADR_projekt/projekt/wyglad2.png)
+
+## Obsluga aplikacji (server.R)
+
+Obsluga oraz kody tworzace wyniki na podstawie informacji pobranych od użytkownika zostaly zdeklarowane w pliku _server.R_.
+
+Kod zawarty w omawiany powstal przy pomocy pakietow _shiny_, _ggplot2_, _forecast_, _dplyr_ oraz pakiet podstawowy.
+
+```{r biblioteki, eval=FALSE}
+#aplikacja
+library(shiny)
+#wykresy
+library(ggplot2)
+#analiza przewidywan
+library(forecast)
+library(dplyr)
+#zaladowanie przygotowanych wczesniej danych
+load("Dane.RData")
+```
+
+Najwazniejszym elementem w tej czesci aplikacji jest pobranie od uzytkownika informacji. Kod umozliwiajacy ,,wysluchanie" uzytkownika powstal w oparciu o _observe()_, _session_ oraz _updateSelectInput()_. Wymienione funkcje oraz obiekt pozwalaja uzytkownikowi na zmiane parametrow.
+
+```{r wysluchiwanie, eval=FALSE}
+observe({
+        updateSelectInput( session, "kontynent",
+                           choices = dana$region
+        )
+    })
+    
+    observe({
+        updateSelectInput(session, "cecha",
+                          choices = dana %>% 
+                             filter(region == input$kontynent)%>%
+                             select(cecha))
+    })
+    
+    observe({
+        updateSelectInput(session, "wiek",
+                             choices = dana %>%
+                                filter(cecha == input$cecha)%>%
+                                select(wiek))
+    })
+```
+
+Otrzymujac dane od uzytkownika wyswietlana jest tabela z podsumowaniem wartosci dla danej cechy, w danym przedziale wiekowym na danym kontynencie. Ponizszy kod przedstawia sposob w jakim powstalo to podsumowanie oraz jak jest wyswietlane.
+Do takiego podsumowania wykorzystano funkcje _summary()_, ktora wylicza takie parametry jak srednia, mediana, pierwszy oraz trzeci kwartyl. 
+
+UWAGA!!! Kod przedstawia wyswietlanie dla dwoch regionow. Wyliczanie oraz wyswietlanie podsumowania wykonano analogicznie dla pozostalych regionow.
+
+```{r podsumowanie, eval=FALSE}
+#wyswietlanie
+output$analiza <- renderPrint({
+        tableInput()
+    })
+#tworzenie tablicy na podstawie otrzymanych informacji
+    tableInput <- reactive({
+        #przypisanie wybranych danych do zmiennych
+        region <- input$kontynent
+        cecha <- input$cecha
+        nazwa <- paste0(cecha,region)
+        
+        if(nazwa == 'noweAzja')
+            summary(noweAzja[input$wiek])
+        else if (nazwa == 'smiercAzja')
+            summary(smiercAzja[input$wiek])
+        else if (nazwa == 'przypadekAzja')
+            summary(przypadekAzja[input$wiek])
+        else if (region == 'Wschodnia i Poludniowa Afryka' && cecha == "smierc")
+          summary(smiercWPAfryka[input$wiek])
+        else if (region == 'Wschodnia i Poludniowa Afryka' && cecha == "nowe")
+          summary(noweWPAfryka[input$wiek])
+        else if (region == 'Wschodnia i Poludniowa Afryka' && cecha == "przypadek")
+
+```
+
+Nastepnym krokiem bylo wyswietlanie wykresow na podstawie wybranych danych od uzytkownika. Wykresy powstaly dzieki wykorzystaniu pakietu _ggplot2_. Funkcja _ggplot()_ odpowiedzialna za tworzenie wykresu na podstawie wybranej ramki danych, _geom_point()_ - zanzaczenie punktow, _geom_line()_ - polaczenie wczesniej zaznaczonych punktow, _xlab()_ - opis osi x, _ylab()_ - opis osi y, _ggtitle()_ - tytul wykresu. 
+
+UWAGA!!! Poniższy kod zostal powtorzony analogicznie dla pozostalych regionow.
+
+```{r wykres, eval=FALSE}
+#wyswietlanie
+output$wykAnaliza <- renderPlot({
+        plotInput()
+  
+    })
+#tworzenie odpowiednich wykresow
+plotInput <- reactive({
+        region <- input$kontynent
+        cecha <- input$cecha
+        nazwa <- paste0(cecha,region)
+        if (nazwa == 'noweAzja'){
+                ggplot(noweAzja, aes(rok, noweAzja[,input$wiek])) +
+                    geom_point(mapping = aes(rok, noweAzja[,input$wiek]), color = 'blue') +
+                    geom_line(mapping = aes(rok, noweAzja[,input$wiek]), color = 'blue')+
+                    xlab("rok") + ylab("Liczba nowych przypadkow") +
+                    ggtitle(sprintf("Nowe przypadki zakazen dla przedzialu: %s (%s)", input$wiek, region))
+          
+            }else if (nazwa == 'smiercAzja'){
+                ggplot(smiercAzja, aes(rok, smiercAzja[,input$wiek])) +
+                    geom_point(mapping = aes(rok, smiercAzja[,input$wiek]), color = 'blue') +
+                    geom_line(mapping = aes(rok, smiercAzja[,input$wiek]), color = 'blue')+
+                    xlab("rok") + ylab("Liczba zgonow") +
+                    ggtitle(sprintf("Smierc spowodowana wirusem dla przedzialu: %s (%s)", input$wiek, region))
+              
+            }else if (nazwa == 'przypadekAzja'){
+                ggplot(przypadekAzja, aes(rok, przypadekAzja[,input$wiek])) +
+                    geom_point(mapping = aes(rok, przypadekAzja[,input$wiek]), color = 'blue') +
+                    geom_line(mapping = aes(rok, przypadekAzja[,input$wiek]), color = 'blue')+
+                    xlab("rok") + ylab("Liczba istniejacych przypadkow") +
+                    ggtitle(sprintf("Istniejce przypadki dla przedzialu: %s (%s)", input$wiek, region))
+           }
+....
+})
+              
+```
+
+Uzytkownik ma mozliwosc zapisu powstalego wykresu. Plik zostaje zapisany przy uzyciu funkcji _ggsave()_. Nalezy rowniez zauwazyc, ze uzytkownik pobierajac wykres nie ma wplywu na nazwe zapisu, poniewaz nazwa jest przydzialana automatycznie. Zalezy ona od wyboru przedzialu wiekowego.
+
+```{r zapis wykres, eval=FALSE}
+output$pobierz <-downloadHandler(
+        filename = function(){
+            #tworzenie nazwy pliku  
+            print(paste0(input$wiek, '.pdf'))
+        },
+        content = function(file){
+            #zapis
+            ggsave(file, plotInput())
+        
+    })
+```
+
+Jak wspominano wyzej (Prezentacja pobierania danych i operacji ich przygotowania do pracy) niektore dane byly puste. Uzytkownik zostaje o tym poinformowany przy pomocy ponizszego komunikatu. Wykres przyjmuje wartosci 0.
+
+```{r komunikat, eval=FALSE}
+#wyswietlenie
+output$uwagadane <-renderText({
+      uwagaDane()
+    })
+#komunikat
+uwagaDane <- reactive({
+      "Jesli WYKRES nie zostal narysowany -> BRAK DOSTEPNYCH DANYCH;
+        Zakladka PRZEWIDYWANIA - nie dziala"
+    })
+```
+
+We wspomnianej wyzej zakladce PRZEWIDYWANIA zostaje przedstwiona wizualizacja rozwoju poszczegolnych cech na podstawie danych z poszczegolnych ramek. Podczas wizualizacji użyto pakietu _forecast_, ktory umozliwia przewidzenie dalszego rozwoju, dzieki swoim funkcja. Funkcja _auto.arima()_ zwraca najlepszy model na podstawie danych, funkcja _forecast()_ - prognozowanie na podstawie szeregow czasowych. Korzystajac z funkcji _forecast()_ wybieramy wczesniej wyliczony model, paramter **h** odpowiada za liczbe okresow prognozowania (w naszym przypadku jest to analiza na kolejne 10 lat), **level** - poziom ufnosci dla przedzialow predykcji (w naszym przypadku poziom ufnosci jest na poziomie 95). Funkcja _autoplot()_ odpowiada za wyswietlanie wykresu z predykcja (paramter showgap - mial wyeliminowac przerwe powstajaca na wykresie - niestety nie udalo sie tego wyeliminowac).
+
+UWAGA!!! Poniższy kod zostal powtorzony analogicznie dla pozostalych regionow.
+
+```{r predykcja, eval=FALSE}
+#wyswietlenie
+output$wykPredykcja <- renderPlot({
+      plotInput2()
+    })
+#tworzenie odpowiedniego modelu i tworzenie go na wykresie    
+plotInput2 <- reactive({
+        region <- input$kontynent
+        cecha <- input$cecha
+        nazwa <- paste0(cecha,region)
+        
+        if(nazwa == 'noweAzja'){
+            mymodel <- auto.arima(noweAzja[input$wiek])
+            myforecast <- forecast(mymodel,level=c(95),h = 10)
+            autoplot(myforecast, showgap = FALSE, xlab = "Szereg czasowy", 
+                     ylab = "Ludnosc")
+        }
+        else if(nazwa == 'smiercAzja'){
+            mymodel <- auto.arima(smiercAzja[input$wiek])
+            myforecast <- forecast(mymodel,level=c(95),h = 10)
+            autoplot(myforecast, showgap = FALSE, xlab = "Szereg czasowy", 
+                   ylab = "Ludnosc")
+        }
+        else if(nazwa == 'przypadekAzja'){
+          mymodel <- auto.arima(przypadekAzja[input$wiek])
+          myforecast <- forecast(mymodel,level=c(95),h = 10)
+          autoplot(myforecast, showgap = FALSE, xlab = "Szereg czasowy", 
+                   ylab = "Ludnosc")
+        }
+...
+})
+```
+
+Wykres predykcji ma rowniez opcje zapisu. Kod zapisu wykresu powstal analogicznie jak wczesniej opisanym przypadku. Z drobna roznica - inna nazwa pliku (predykcja.pdf).
+
+W zakladce SWIAT uzytkownik ma mozliwosc obserwacji udzialu poszczegolnych kontynetow dla danej cechy w danym roku. Obserwowana cecha zostaje wybrana w zakladce KONTYNENT. Natomiast wybor roku zalezy od wybrania roku na ,,suwaku". Na podstawie tak otrzymanych danych wyswietlany zostaje wykres kolowy wraz z legenda. Podczas tworzenia wykresu kolowego wykorzystano funkcje _round()_, ktora umozliwila wyliczenie dzialu procentowego, _pie()_ - tworzenie wykresu z paramterami takimi jak nazwa wykresu oraz w jakiej kolorystyce ma byc wykres. Funkcja _legend()_ umozliwila dopasowanie legendy do wykresu - prawy gorny rog oraz jakie maja byc podpisy poszczegolnych kolorow.
+
+UWAGA!!! Na podstawie ponizszego kodu powstaly analogiczne kody dla poszczegolnych cech oraz wybranych lat.
+
+```{r wykres kolowy, eval=FALSE}
+#wybranie cechy
+cecha <- reactive({
+      input$cecha
+    })
+#wyswietlanie
+output$udzial <- renderPlot({
+          plotInput3()
+    })
+#tworzenie wykresu kolowego  
+plotInput3 <- reactive({
+      rok <- input$rok
+      regiony <- paste0(cecha(),"Total")
+      
+      if(regiony == 'smiercTotal'){
+        if( rok == '1990'){
+          opisprocent <- round(100*smiercTotal$`1990`/sum(smiercTotal$`1990`),1)
+          pie(smiercTotal$`1990`, labels = paste(opisprocent, sep = " ", "%"),
+              main = "Udzial poszczegolnych kontynentow cecha: SMIERC w 1990",
+              col = rainbow(length(smiercTotal$`1990`)))
+          legend("topright", kontynentyWykres, cex = 0.7, 
+                 fill = rainbow(length(smiercTotal$`1990`)))
+        }
+
+        else if( rok == '1991'){
+          opisprocent <- round(100*smiercTotal$`1991`/sum(smiercTotal$`1991`),1)
+          pie(smiercTotal$`1991`, labels = paste(opisprocent, sep = " ", "%"),
+              main = "Udzial poszczegolnych kontynentow cecha: SMIERC w 1991",
+              col = rainbow(length(smiercTotal$`1990`)))
+          legend("topright", kontynentyWykres, cex = 0.7, 
+                 fill = rainbow(length(smiercTotal$`1991`)))
+        }
+...        
+          
+```
+
+Podczas wyswietlania wyzej opisanego wykresu do chodzi do zaklocenia. Aby poprawnie wyswietlic ten wykres uzytkownik zostaje poinformawany w jaki sposob ma to zrobic.
+
+```{r komunkat2, eval = FALSE}
+#wyswietlanie
+output$uwagawyswietlanie <- renderText({
+      uwaga()
+    })
+#tworzenie komunikatu
+uwaga <- reactive({"UWAGA! Aby poprawnie odczytac wykres, 
+                               nalezy ROZSZERZYC okno"})
+
+```
+
+## Krotki opis sposobu poradzenia sobie z problemem "spoza wykladu"
+
+* Wizualizacja mapy swiata
+
+Powyzszy problem nie zostal zrealizowany. Powodem braku realizacji byla inna deklaracja kontynentow niz deklaracja w programie RStudio. Natomiast zamysl przedstawienia udzialu poszczegolnych kontynentow zostal zrealizowany jako wykres kolowy, a nie jako graficzne przedstawienie mapy.
+
+* Użycie pakietu _forecast_
+
+Pakiet forecast daje dużo mozliowsci. W naszym przypadku pakiet ten umozliwil stworzyc model rozwoju poszczegolnych cech oraz jego wizualizacje. Wydaje mi sie, ze im wieksza ilosc danych tym ten pakiet i jego funkcje daja duze mozliwosci. Mam wrazenie, że ten pakiet nie zostal w 100% wykorzystany w tym projekcie, ale pozostawil mozliwosc poznania tego pakietu blizej. Najwiekszym problem podczas wykorzystania nowego pakietu bylo zrozumienie wszystkich zmiennych, ktore umozliwiaja dokladniejsze wyliczenia predykcji. Internet to duzy zbior wiedzy, dzieki poradnikom oraz dokumentacji mozna rozwijac swoje umiejetnosci w tym zakresie.
+
+link do aplikacji <https://krakowiakaleksandra.shinyapps.io/projekt/>
