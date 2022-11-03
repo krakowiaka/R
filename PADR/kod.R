@@ -616,7 +616,7 @@ kontynentyWykres <- c('Azja i Pacyfik', 'Karaiby', 'Wschodnia i Poudniowa Afryka
 
 #DANE POMOCNE PRZY TWORZENIU APLIKACJI
 
-#stworzenie ramki danych z opcjami do wyboru przez u¿ytkownika
+#stworzenie ramki danych z opcjami do wyboru przez uÅ¼ytkownika
 region <- c(rep("Azja", 12),rep("Karaiby",12), rep("Wschodnia i Poludniowa Afryka",12),
             rep("Wschodnia Europa i Centralna Azja",12), rep("Srodkowa i Poludniowa Ameryka",12),
             rep("Srodkowozachodnia i Polnocna Afryka",12), rep("Zachodnia i Centralna Afryka",12),
